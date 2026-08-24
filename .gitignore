@@ -3,5 +3,7 @@ node_modules/
 .vercel/
 *.log
 data/*.csv
-data/cheater-user-ids.json
+!data/cheater-user-ids.json
+
+.vercel
 
