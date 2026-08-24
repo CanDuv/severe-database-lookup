@@ -1,9 +1,9 @@
-import database from "../../../data/cheater-user-ids.json";
+import database from "../../../data/roblox-usernames.json";
 
 const numericId = /^\d{1,20}$/;
 const username = /^[A-Za-z0-9_]{3,20}$/;
 const CACHE_CONTROL = "public, s-maxage=300, stale-while-revalidate=3600";
-const databaseIds = new Set(database.ids);
+const databaseUsernames = new Set(database.usernames.map((value) => value.toLowerCase()));
 
 type RobloxUser = { id: string; name: string; displayName: string };
 type GroupRole = { group: { id: number; name: string }; role: { name: string; rank: number } };
@@ -13,8 +13,6 @@ function respond(payload: object, status = 200) {
 }
 
 async function resolveUser(value: string): Promise<RobloxUser | null> {
-  if (numericId.test(value)) return { id: value, name: value, displayName: value };
-
   const response = await fetch("https://users.roblox.com/v1/usernames/users", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -32,8 +30,8 @@ export async function GET(request: Request) {
   const userInput = searchParams.get("user")?.trim() ?? "";
   const groupId = searchParams.get("groupId")?.trim() ?? "";
 
-  if (!(numericId.test(userInput) || username.test(userInput)) || !numericId.test(groupId)) {
-    return respond({ error: "Provide a Roblox username or numeric user ID, plus a numeric group ID." }, 400);
+  if (!username.test(userInput) || !numericId.test(groupId)) {
+    return respond({ error: "Provide a Roblox username and a numeric group ID." }, 400);
   }
 
   try {
@@ -41,10 +39,10 @@ export async function GET(request: Request) {
     if (!user) return respond({ error: "No Roblox user was found for that username.", databaseMatch: false, groupMembershipChecked: false }, 404);
 
     const userId = user.id;
-    if (!databaseIds.has(userId)) {
+    if (!databaseUsernames.has(user.name.toLowerCase())) {
       return respond({
         query: { user: userInput, groupId },
-        user: { id: userId, username: numericId.test(userInput) ? undefined : user.name, displayName: user.displayName },
+        user: { id: userId, username: user.name, displayName: user.displayName },
         databaseMatch: false,
         groupMembershipChecked: false,
         message: "This profile ID is not present in the imported database, so Roblox group membership was not queried.",
