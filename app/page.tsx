@@ -12,11 +12,31 @@ type LookupResponse = {
   error?: string;
 };
 
+type GroupMatch = {
+  username: string;
+  displayName: string;
+  userId: string;
+  roleName: string;
+  rank: number;
+  profileUrl: string;
+};
+
+type GroupScanResponse = {
+  groupId: string;
+  scanned: number;
+  matches: GroupMatch[];
+  nextCursor: string | null;
+  error?: string;
+};
+
 export default function Home() {
   const [user, setUser] = useState("");
   const [groupId, setGroupId] = useState("");
   const [result, setResult] = useState<LookupResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [scanGroupId, setScanGroupId] = useState("");
+  const [scanResult, setScanResult] = useState<GroupScanResponse | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +59,43 @@ export default function Home() {
     }
   }
 
+  async function fetchGroupPage(cursor?: string) {
+    const params = new URLSearchParams({ groupId: scanGroupId.trim() });
+    if (cursor) params.set("cursor", cursor);
+    const response = await fetch(`/api/group-members?${params}`);
+    return (await response.json()) as GroupScanResponse;
+  }
+
+  async function onGroupScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScanLoading(true);
+    setScanResult(null);
+    try {
+      setScanResult(await fetchGroupPage());
+    } catch {
+      setScanResult({ groupId: scanGroupId, scanned: 0, matches: [], nextCursor: null, error: "The group scan could not be reached. Please try again." });
+    } finally {
+      setScanLoading(false);
+    }
+  }
+
+  async function loadMoreGroupMembers() {
+    if (!scanResult?.nextCursor) return;
+    setScanLoading(true);
+    try {
+      const nextPage = await fetchGroupPage(scanResult.nextCursor);
+      setScanResult((previous) => previous && {
+        ...nextPage,
+        scanned: previous.scanned + nextPage.scanned,
+        matches: [...previous.matches, ...nextPage.matches],
+      });
+    } catch {
+      setScanResult((previous) => previous && { ...previous, error: "The next page could not be loaded. Please try again." });
+    } finally {
+      setScanLoading(false);
+    }
+  }
+
   return (
     <main>
       <section className="hero">
@@ -51,11 +108,11 @@ export default function Home() {
 
       <form onSubmit={onSubmit} className="lookup-form">
         <label>
-          Roblox username or user ID
+          Roblox username
           <input
             value={user}
             onChange={(event) => setUser(event.target.value)}
-            placeholder="Builderman or 156"
+            placeholder="Builderman"
             autoComplete="off"
             required
           />
@@ -76,10 +133,59 @@ export default function Home() {
 
       {result && <ResultCard result={result} />}
 
+      <section className="scan-section">
+        <p className="eyebrow">Group-only scan</p>
+        <h2>Find detected members in a group</h2>
+        <p className="intro">Matches use Roblox usernames from the current group roster, not the source file&apos;s profile IDs.</p>
+        <form onSubmit={onGroupScan} className="lookup-form group-form">
+          <label>
+            Roblox group ID
+            <input
+              value={scanGroupId}
+              onChange={(event) => setScanGroupId(event.target.value)}
+              placeholder="268995170"
+              inputMode="numeric"
+              autoComplete="off"
+              required
+            />
+          </label>
+          <button type="submit" disabled={scanLoading}>{scanLoading ? "Scanning…" : "Scan group"}</button>
+        </form>
+        {scanResult && <GroupScanResult result={scanResult} loading={scanLoading} onLoadMore={loadMoreGroupMembers} />}
+      </section>
+
       <p className="notice">
         A database match only means the supplied profile ID appears in the imported source file. It is not an independent finding about a person or an account. Group data is fetched from Roblox when a match is found.
       </p>
     </main>
+  );
+}
+
+function GroupScanResult({ result, loading, onLoadMore }: { result: GroupScanResponse; loading: boolean; onLoadMore: () => void }) {
+  if (result.error) {
+    return <section className="result error" aria-live="polite"><h2>Couldn&apos;t scan group</h2><p>{result.error}</p></section>;
+  }
+
+  return (
+    <section className="result group-result" aria-live="polite">
+      <p className="result-label">Group {result.groupId}</p>
+      <h2>{result.matches.length} detected {result.matches.length === 1 ? "member" : "members"}</h2>
+      <p>Checked {result.scanned} current group members by Roblox username.</p>
+      {result.matches.length > 0 && (
+        <ul className="profile-list">
+          {result.matches.map((member) => (
+            <li key={member.userId}>
+              <a href={member.profileUrl} target="_blank" rel="noreferrer">
+                <strong>@{member.username}</strong>
+                {member.displayName !== member.username && <span>{member.displayName}</span>}
+                <small>{member.roleName} · Rank {member.rank}</small>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {result.nextCursor && <button className="load-more" type="button" onClick={onLoadMore} disabled={loading}>{loading ? "Scanning…" : "Scan next 100 members"}</button>}
+    </section>
   );
 }
 
