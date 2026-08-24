@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const inputPath = process.argv[2];
@@ -42,6 +42,7 @@ const output = {
   ids,
 };
 const outputPath = resolve("data/cheater-user-ids.json");
+await mkdir(resolve("data"), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(output)}\n`);
 console.log(`Wrote ${ids.length} unique profile IDs to ${outputPath}`);
 
