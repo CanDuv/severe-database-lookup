@@ -1,3 +1,4 @@
-# Keep raw CSV exports out of deployments; the compact lookup index is bundled.
+# Keep raw CSV exports and unused source-ID artifacts out of deployments.
 data/*.csv
+data/cheater-user-ids.json
 
