@@ -3,7 +3,7 @@ node_modules/
 .vercel/
 *.log
 data/*.csv
-!data/cheater-user-ids.json
+!data/roblox-usernames.json
 
 .vercel
 
