@@ -30,19 +30,26 @@ function parseCsv(text) {
 
 const rows = parseCsv(await readFile(resolve(inputPath), "utf8"));
 const header = rows.shift();
-const idColumn = header?.indexOf("Profile User ID") ?? -1;
-if (idColumn < 0) throw new Error('CSV is missing the "Profile User ID" column.');
+const usernameColumn = header?.indexOf("Roblox Username") ?? -1;
+if (usernameColumn < 0) throw new Error('CSV is missing the "Roblox Username" column.');
 
-const ids = [...new Set(rows.map((row) => row[idColumn]?.trim()).filter((id) => /^\d{1,20}$/.test(id)))].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+const usernamesByKey = new Map();
+for (const row of rows) {
+  const name = row[usernameColumn]?.trim();
+  if (name && /^[A-Za-z0-9_]{3,20}$/.test(name) && !usernamesByKey.has(name.toLowerCase())) {
+    usernamesByKey.set(name.toLowerCase(), name);
+  }
+}
+const usernames = [...usernamesByKey.values()].sort((a, b) => a.localeCompare(b));
 const output = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   source: "Severe Injection Database - Refined Raw Data.csv",
   sourceRecordCount: rows.length,
-  uniqueProfileUserIdCount: ids.length,
-  ids,
+  uniqueRobloxUsernameCount: usernames.length,
+  usernames,
 };
-const outputPath = resolve("data/cheater-user-ids.json");
+const outputPath = resolve("data/roblox-usernames.json");
 await mkdir(resolve("data"), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(output)}\n`);
-console.log(`Wrote ${ids.length} unique profile IDs to ${outputPath}`);
+console.log(`Wrote ${usernames.length} unique Roblox usernames to ${outputPath}`);
 
