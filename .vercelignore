@@ -1,0 +1,3 @@
+# Never upload the private lookup index or raw exports with a deployment.
+data/
+
