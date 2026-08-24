@@ -1,15 +1,12 @@
+import database from "../../../data/cheater-user-ids.json";
+
 const numericId = /^\d{1,20}$/;
 const username = /^[A-Za-z0-9_]{3,20}$/;
 const CACHE_CONTROL = "public, s-maxage=300, stale-while-revalidate=3600";
-const INDEX_TTL_MS = 5 * 60 * 1000;
-
-let cachedIds: Set<string> | undefined;
-let cacheExpiresAt = 0;
+const databaseIds = new Set(database.ids);
 
 type RobloxUser = { id: string; name: string; displayName: string };
 type GroupRole = { group: { id: number; name: string }; role: { name: string; rank: number } };
-
-class DatabaseUnavailable extends Error {}
 
 function respond(payload: object, status = 200) {
   return Response.json(payload, { status, headers: { "Cache-Control": CACHE_CONTROL } });
@@ -30,29 +27,6 @@ async function resolveUser(value: string): Promise<RobloxUser | null> {
   return match ? { ...match, id: String(match.id) } : null;
 }
 
-async function getDatabaseIds() {
-  if (cachedIds && Date.now() < cacheExpiresAt) return cachedIds;
-
-  const url = process.env.DATABASE_INDEX_URL;
-  if (!url) throw new DatabaseUnavailable("The private database index has not been configured.");
-
-  const token = process.env.DATABASE_INDEX_BEARER_TOKEN;
-  const response = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    cache: "no-store",
-  });
-  if (!response.ok) throw new DatabaseUnavailable("The private database index could not be loaded.");
-
-  const payload = (await response.json()) as { ids?: unknown };
-  if (!Array.isArray(payload.ids) || !payload.ids.every((id) => typeof id === "string" && numericId.test(id))) {
-    throw new DatabaseUnavailable("The private database index has an invalid format.");
-  }
-
-  cachedIds = new Set(payload.ids);
-  cacheExpiresAt = Date.now() + INDEX_TTL_MS;
-  return cachedIds;
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userInput = searchParams.get("user")?.trim() ?? "";
@@ -67,7 +41,6 @@ export async function GET(request: Request) {
     if (!user) return respond({ error: "No Roblox user was found for that username.", databaseMatch: false, groupMembershipChecked: false }, 404);
 
     const userId = user.id;
-    const databaseIds = await getDatabaseIds();
     if (!databaseIds.has(userId)) {
       return respond({
         query: { user: userInput, groupId },
@@ -94,10 +67,7 @@ export async function GET(request: Request) {
         ? { isMember: true, groupName: role.group.name, roleName: role.role.name, rank: role.role.rank }
         : { isMember: false },
     });
-  } catch (error) {
-    if (error instanceof DatabaseUnavailable) {
-      return respond({ error: error.message, databaseMatch: false, groupMembershipChecked: false }, 503);
-    }
+  } catch {
     return respond({
       query: { user: userInput, groupId },
       databaseMatch: false,
